@@ -228,11 +228,7 @@ impl VaultWatcher {
         }
 
         // Check if markdown file
-        if config.markdown_only && !event.is_markdown() {
-            return false;
-        }
-
-        true
+        !(config.markdown_only && !event.is_markdown())
     }
 }
 
