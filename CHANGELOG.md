@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Links in Markdown tables.** Inside a table Obsidian writes the alias pipe escaped, `[[Note\|Shown]]` and `![[image.png\|300]]`. TurboVault kept the backslash, so these came out as links to `Note\` and `image.png\` in link listings, broken-link reports and attachment checks.
 - **Markdown links in properties.** Obsidian 1.11 treats a Markdown link in a text or list property, `source: "[Paper](paper.md)"`, as a link. TurboVault only found wikilinks there, so these never showed up as links or backlinks.
+- **Nested list item text no longer duplicates into the parent's inline.** Sub-item text and formatting no longer bleed upward or get fused into the parent line. Only links and images are now propagated to the parent for outline consumers; all other nested text stays with its owner and must be accessed via blocks.
 
 ## [3.2.0] - 2026-10-05
 

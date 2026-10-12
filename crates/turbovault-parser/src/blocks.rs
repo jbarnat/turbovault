@@ -1208,34 +1208,36 @@ pub fn slugify(text: &str) -> String {
 // Helper functions
 // ============================================================================
 
-/// Recursively collect inline elements from content blocks.
+/// Whether an inline element is carried up from nested blocks into an
+/// enclosing list item's `inline`.
 ///
-/// This traverses nested structures (paragraphs, lists, blockquotes) to gather
-/// all inline elements, enabling consumers to find links and other inline
-/// content from nested list items.
+/// Only links and images are: they are what consumers look for in a nested
+/// outline. Text and formatting stay with the item that owns them, otherwise
+/// the parent's `inline` would hold text its own `content` does not.
+fn is_hoisted_inline(element: &InlineElement) -> bool {
+    matches!(
+        element,
+        InlineElement::Link { .. } | InlineElement::Image { .. }
+    )
+}
+
 fn collect_inline_elements(blocks: &[ContentBlock], output: &mut Vec<InlineElement>) {
     for block in blocks {
         match block {
             ContentBlock::Paragraph { inline, .. } => {
-                output.extend(inline.iter().cloned());
+                output.extend(inline.iter().filter(|e| is_hoisted_inline(e)).cloned());
             }
-            // A list item's own `inline` is already this recursive collection
-            // applied to it, gathered when the item itself was closed (see the
-            // `Event::End(TagEnd::Item)` handler). Walking `item.blocks` here
-            // too would gather a nested item's links twice.
+            // A nested item's `inline` is already this collection applied to
+            // it, so it is filtered here rather than recursed into, which
+            // would gather its links twice.
             ContentBlock::List { items, .. } => {
                 for item in items {
-                    output.extend(item.inline.iter().cloned());
+                    output.extend(item.inline.iter().filter(|e| is_hoisted_inline(e)).cloned());
                 }
             }
-            ContentBlock::Blockquote { blocks, .. } => {
+            ContentBlock::Blockquote { blocks, .. } | ContentBlock::Details { blocks, .. } => {
                 collect_inline_elements(blocks, output);
             }
-            ContentBlock::Details { blocks, .. } => {
-                collect_inline_elements(blocks, output);
-            }
-            // Headings, Code, HorizontalRule, Table, Image don't have nested inline elements
-            // that we need to collect (or they store them differently)
             _ => {}
         }
     }
@@ -2138,5 +2140,95 @@ See [[WikiNote]] for more info."#;
             rows[0][0]
         );
         assert_eq!(rows[0][1], "list files");
+    }
+    #[test]
+    fn test_nested_item_with_inline_spans_stays_on_one_line() {
+        // Code spans, emphasis and links split a paragraph into several text
+        // events; each nested item must still be a single line of content.
+        let markdown = "1. top\n   * *Em:* a (`x`) b `y` c [l](u) d\n   * `lead` tail\n";
+
+        let blocks = parse_blocks(markdown);
+        let ContentBlock::List { items, .. } = &blocks[0] else {
+            panic!("Expected List block");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].content, "top");
+
+        let ContentBlock::List { items: nested, .. } = &items[0].blocks[0] else {
+            panic!("Expected nested List block");
+        };
+        assert_eq!(nested.len(), 2);
+        assert_eq!(nested[0].content, "Em: a (x) b y c [l](u) d");
+        assert_eq!(nested[1].content, "lead tail");
+    }
+    /// Text of a nested list item must stay in that item, and must not be
+    /// glued onto the content or inline elements of its parent.
+    ///
+    /// The parent here ends with inline formatting (bold + code), which is the
+    /// case where the leak used to happen.
+    #[test]
+    fn test_nested_item_text_stays_out_of_parent_item() {
+        const NESTED_TEXT: &str = "What to expect";
+
+        let markdown = "\
+1. **`alpha.txt`** and **`beta.txt`**
+2. **`gamma.txt`**
+    - *What to expect:* the context object (`Ctx`).
+";
+
+        let blocks = parse_blocks(markdown);
+        assert_eq!(blocks.len(), 1, "expected a single top-level list");
+
+        let ContentBlock::List { items, ordered } = &blocks[0] else {
+            panic!("expected a List block, got {:?}", blocks[0]);
+        };
+        assert!(*ordered, "top-level list should be ordered");
+        assert_eq!(items.len(), 2, "top-level list should have 2 items");
+
+        // The first item is unaffected.
+        assert!(
+            items[0].content.contains("alpha.txt"),
+            "item 1 lost its own text: {:?}",
+            items[0].content
+        );
+
+        // The parent must not contain the nested item's text...
+        assert!(
+            !items[1].content.contains(NESTED_TEXT),
+            "nested text leaked into parent `content`: {:?}",
+            items[1].content
+        );
+        assert!(
+            !items[1].inline.iter().any(|elem| match elem {
+                InlineElement::Text { value }
+                | InlineElement::Emphasis { value }
+                | InlineElement::Strong { value } => value.contains(NESTED_TEXT),
+                _ => false,
+            }),
+            "nested text leaked into parent `inline`: {:?}",
+            items[1].inline
+        );
+
+        // ...it must live only in the parent's nested blocks.
+        assert_eq!(
+            items[1].blocks.len(),
+            1,
+            "parent should have exactly one nested block: {:?}",
+            items[1].blocks
+        );
+        let ContentBlock::List {
+            items: nested_items,
+            ordered: nested_ordered,
+        } = &items[1].blocks[0]
+        else {
+            panic!("expected a nested List block, got {:?}", items[1].blocks[0]);
+        };
+        assert!(!*nested_ordered, "nested list should be unordered");
+        assert_eq!(nested_items.len(), 1, "nested list should have 1 item");
+        assert!(
+            nested_items[0].content.contains(NESTED_TEXT),
+            "nested item lost its own text: {:?}",
+            nested_items[0].content
+        );
     }
 }

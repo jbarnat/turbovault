@@ -382,10 +382,6 @@
                   {
                     "type": "text",
                     "value": "nested item"
-                  },
-                  {
-                    "type": "text",
-                    "value": "deeper item"
                   }
                 ]
               }
@@ -400,14 +396,6 @@
           {
             "type": "text",
             "value": "outer item"
-          },
-          {
-            "type": "text",
-            "value": "nested item"
-          },
-          {
-            "type": "text",
-            "value": "deeper item"
           }
         ]
       },
@@ -446,10 +434,6 @@
           {
             "type": "text",
             "value": "outer task"
-          },
-          {
-            "type": "text",
-            "value": "nested task"
           }
         ]
       }
@@ -484,10 +468,6 @@
           {
             "type": "text",
             "value": "outer ordered"
-          },
-          {
-            "type": "text",
-            "value": "nested ordered"
           }
         ]
       }
@@ -826,10 +806,6 @@
               {
                 "type": "text",
                 "value": "quoted outer"
-              },
-              {
-                "type": "text",
-                "value": "quoted nested"
               }
             ]
           }
@@ -916,10 +892,6 @@
               {
                 "type": "text",
                 "value": "quoted step"
-              },
-              {
-                "type": "text",
-                "value": "a continuation paragraph of the item above"
               }
             ]
           }
